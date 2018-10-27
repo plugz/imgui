@@ -214,6 +214,10 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     int total_vertex_count = 0;
     int total_elem_count = 0;
 
+    static int buffer_total_vertex_count = 0;
+    static int buffer_total_elem_count = 0;
+
+
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -222,7 +226,10 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, g_VboHandle);
-    glBufferData(GL_ARRAY_BUFFER, total_vertex_count * sizeof(ImDrawVert), nullptr, GL_STREAM_DRAW);
+    if (total_vertex_count > buffer_total_vertex_count) {
+        glBufferData(GL_ARRAY_BUFFER, total_vertex_count * sizeof(ImDrawVert), nullptr, GL_STREAM_DRAW);
+        buffer_total_vertex_count = total_vertex_count;
+    }
     std::vector<ImDrawIdx> offsets;
     int offset = 0;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
@@ -234,10 +241,11 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
         offset += cmd_list->VtxBuffer.Size;
     }
 
-    std::cout << "vert count is " << offset << std::endl;
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ElementsHandle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, total_elem_count * sizeof(ImDrawIdx), nullptr, GL_STREAM_DRAW);
+    if (total_elem_count > buffer_total_elem_count) {
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, total_elem_count * sizeof(ImDrawIdx), nullptr, GL_STREAM_DRAW);
+        buffer_total_elem_count = total_elem_count;
+    }
     offset = 0;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
@@ -251,11 +259,6 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
                 (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), (const GLvoid*)buffer);
         offset += cmd_list->IdxBuffer.Size;
     }
-
-    std::map<int, std::vector<int>> textureToCommand;
-
-    static int prev_total_vertex_count = 0;
-    static int prev_total_elem_count = 0;
 
     int drawCount = 0;
 
