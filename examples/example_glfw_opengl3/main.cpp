@@ -145,6 +145,7 @@ int main(int, char**)
             ImGui::Text("counter = %d", counter);
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            fprintf(stdout, "Application average %.3f ms/frame (%.2f FPS)\n", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::End();
         }
 
@@ -158,7 +159,7 @@ int main(int, char**)
             ImGui::End();
         }
 
-        for (unsigned int i = 0; i < 1000; ++i)
+        for (unsigned int i = 0; i < 10000; ++i)
         {
             std::string winName = std::to_string(i);
             ImGui::Begin(winName.c_str());

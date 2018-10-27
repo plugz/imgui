@@ -211,11 +211,6 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     glVertexAttribPointer(g_AttribLocationUV, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, uv));
     glVertexAttribPointer(g_AttribLocationColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, col));
 
-    std::map<int, std::vector<int>> textureToCommand;
-
-    static int prev_total_vertex_count = 0;
-    static int prev_total_elem_count = 0;
-
     int total_vertex_count = 0;
     int total_elem_count = 0;
 
@@ -256,6 +251,11 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
                 (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), (const GLvoid*)buffer);
         offset += cmd_list->IdxBuffer.Size;
     }
+
+    std::map<int, std::vector<int>> textureToCommand;
+
+    static int prev_total_vertex_count = 0;
+    static int prev_total_elem_count = 0;
 
     int drawCount = 0;
 
