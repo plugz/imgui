@@ -88,6 +88,10 @@
 #endif
 #endif
 
+#include <iostream>
+#include <map>
+#include <vector>
+
 // OpenGL Data
 static char         g_GlslVersionString[32] = "";
 static GLuint       g_FontTexture = 0;
@@ -207,18 +211,61 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     glVertexAttribPointer(g_AttribLocationUV, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, uv));
     glVertexAttribPointer(g_AttribLocationColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, col));
 
+    std::map<int, std::vector<int>> textureToCommand;
+
+    static int prev_total_vertex_count = 0;
+    static int prev_total_elem_count = 0;
+
+    int total_vertex_count = 0;
+    int total_elem_count = 0;
+
+    for (int n = 0; n < draw_data->CmdListsCount; n++)
+    {
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        total_vertex_count += cmd_list->VtxBuffer.Size;
+        total_elem_count += cmd_list->IdxBuffer.Size;
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, g_VboHandle);
+    glBufferData(GL_ARRAY_BUFFER, total_vertex_count * sizeof(ImDrawVert), nullptr, GL_STREAM_DRAW);
+    std::vector<ImDrawIdx> offsets;
+    int offset = 0;
+    for (int n = 0; n < draw_data->CmdListsCount; n++)
+    {
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(ImDrawVert),
+                (GLsizeiptr)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), (const GLvoid*)cmd_list->VtxBuffer.Data);
+        offsets.push_back(offset);
+        offset += cmd_list->VtxBuffer.Size;
+    }
+
+    std::cout << "vert count is " << offset << std::endl;
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ElementsHandle);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, total_elem_count * sizeof(ImDrawIdx), nullptr, GL_STREAM_DRAW);
+    offset = 0;
+    for (int n = 0; n < draw_data->CmdListsCount; n++)
+    {
+        const ImDrawList* cmd_list = draw_data->CmdLists[n];
+        ImDrawIdx buffer[cmd_list->IdxBuffer.Size];
+        memcpy(buffer, cmd_list->IdxBuffer.Data, (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+        for (unsigned int i = 0; i < cmd_list->IdxBuffer.Size; ++i) {
+            buffer[i] += offsets[n];
+        }
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset * sizeof(ImDrawIdx),
+                (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), (const GLvoid*)buffer);
+        offset += cmd_list->IdxBuffer.Size;
+    }
+
+    int drawCount = 0;
+
+    offset = 0;
     // Draw
     ImVec2 pos = draw_data->DisplayPos;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
         const ImDrawIdx* idx_buffer_offset = 0;
-
-        glBindBuffer(GL_ARRAY_BUFFER, g_VboHandle);
-        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), (const GLvoid*)cmd_list->VtxBuffer.Data, GL_STREAM_DRAW);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ElementsHandle);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), (const GLvoid*)cmd_list->IdxBuffer.Data, GL_STREAM_DRAW);
 
         for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
         {
@@ -238,13 +285,17 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
 
                     // Bind texture, Draw
                     glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->TextureId);
-                    glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, idx_buffer_offset);
+                    glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, offset + idx_buffer_offset);
+                    ++drawCount;
                 }
             }
             idx_buffer_offset += pcmd->ElemCount;
         }
+        offset += cmd_list->IdxBuffer.Size;
     }
     glDeleteVertexArrays(1, &vao_handle);
+
+    std::cout << drawCount << std::endl;
 
     // Restore modified GL state
     glUseProgram(last_program);
