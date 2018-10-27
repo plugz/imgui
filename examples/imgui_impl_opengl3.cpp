@@ -269,14 +269,17 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
             const ImDrawList* cmd_list = draw_data->CmdLists[cmdEntry.drawListIdx];
             const ImDrawCmd* cmd = &cmd_list->CmdBuffer[cmdEntry.cmdIdx];
 
-            ImDrawIdx buffer[cmd->ElemCount];
-            memcpy(buffer, cmd_list->IdxBuffer.Data + cmdEntry.offset, cmd->ElemCount * sizeof(ImDrawIdx));
-            for (unsigned int i = 0; i < cmd->ElemCount; ++i) {
-                buffer[i] += offsets[cmdEntry.drawListIdx];
+            {
+                ImDrawIdx* indexesToChange = cmd_list->IdxBuffer.Data + cmdEntry.offset;
+                const ImDrawIdx offsetToAdd = offsets[cmdEntry.drawListIdx];
+                ImDrawIdx* indexesToChangeEnd = indexesToChange + cmd->ElemCount;
+                while (indexesToChange != indexesToChangeEnd) {
+                    *(indexesToChange++) += offsetToAdd;
+                }
             }
 
             glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset * sizeof(ImDrawIdx),
-                    (GLsizeiptr)cmd->ElemCount * sizeof(ImDrawIdx), (const GLvoid*)buffer);
+                    (GLsizeiptr)cmd->ElemCount * sizeof(ImDrawIdx), (const GLvoid*)(cmd_list->IdxBuffer.Data + cmdEntry.offset));
 
             ttc += cmd->ElemCount;
             offset += cmd->ElemCount;
