@@ -217,12 +217,24 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     static int buffer_total_vertex_count = 0;
     static int buffer_total_elem_count = 0;
 
+    struct CmdDesc {
+        int drawListIdx;
+        int cmdIdx;
+        int offset; // offset of indexes in elem buffer
+    };
+    std::map<int, std::vector<CmdDesc>> textureToCmd;
 
-    for (int n = 0; n < draw_data->CmdListsCount; n++)
-    {
+    for (int n = 0; n < draw_data->CmdListsCount; n++) {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
         total_vertex_count += cmd_list->VtxBuffer.Size;
         total_elem_count += cmd_list->IdxBuffer.Size;
+
+        int offset = 0;
+        for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
+            const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+            textureToCmd[(intptr_t)pcmd->TextureId].push_back({n, cmd_i, offset});
+            offset += pcmd->ElemCount;
+        }
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, g_VboHandle);
@@ -247,6 +259,30 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
         buffer_total_elem_count = total_elem_count;
     }
     offset = 0;
+
+    std::map<int, int> textureToCount;
+
+    for (auto const& entry: textureToCmd) {
+        textureToCount[entry.first] = 0;
+        auto& ttc = textureToCount[entry.first];
+        for (auto const& cmdEntry: entry.second) {
+            const ImDrawList* cmd_list = draw_data->CmdLists[cmdEntry.drawListIdx];
+            const ImDrawCmd* cmd = &cmd_list->CmdBuffer[cmdEntry.cmdIdx];
+
+            ImDrawIdx buffer[cmd->ElemCount];
+            memcpy(buffer, cmd_list->IdxBuffer.Data + cmdEntry.offset, cmd->ElemCount * sizeof(ImDrawIdx));
+            for (unsigned int i = 0; i < cmd->ElemCount; ++i) {
+                buffer[i] += offsets[cmdEntry.drawListIdx];
+            }
+
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset * sizeof(ImDrawIdx),
+                    (GLsizeiptr)cmd->ElemCount * sizeof(ImDrawIdx), (const GLvoid*)buffer);
+
+            ttc += cmd->ElemCount;
+            offset += cmd->ElemCount;
+        }
+    }
+    /*
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
         const ImDrawList* cmd_list = draw_data->CmdLists[n];
@@ -259,11 +295,19 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
                 (GLsizeiptr)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), (const GLvoid*)buffer);
         offset += cmd_list->IdxBuffer.Size;
     }
+    */
 
     int drawCount = 0;
-
     offset = 0;
     // Draw
+    const ImDrawIdx* idx_buffer_offset = 0;
+    for (auto const& entry: textureToCount){
+        glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)entry.first);
+        glDrawElements(GL_TRIANGLES, (GLsizei)entry.second, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, idx_buffer_offset);
+        ++drawCount;
+        idx_buffer_offset += entry.second;
+    }
+    /*
     ImVec2 pos = draw_data->DisplayPos;
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
@@ -296,6 +340,8 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
         }
         offset += cmd_list->IdxBuffer.Size;
     }
+    */
+
     glDeleteVertexArrays(1, &vao_handle);
 
     std::cout << drawCount << std::endl;
